@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Petrol Pump Management</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="appShell">
+      <div id="loginScreen" class="screen active">
+        <div class="login-card">
+          <div class="brand-box">
+            <div class="brand-badge">₹</div>
+            <h1>Petrol Pump Pro</h1>
+            <p>Daily accounting & management</p>
+          </div>
+
+          <form id="loginForm">
+            <label>
+              Username
+              <input type="text" id="username" placeholder="admin" required />
+            </label>
+            <label>
+              Password
+              <input type="password" id="password" placeholder="admin123" required />
+            </label>
+            <button type="submit">Login</button>
+          </form>
+          <div id="loginMessage" class="message"></div>
+        </div>
+      </div>
+
+      <div id="mainApp" class="hidden">
+        <header class="topbar">
+          <div>
+            <h2>Petrol Pump Management</h2>
+          </div>
+          <div class="topbar-actions">
+            <span id="usernameBadge">User</span>
+            <button id="logoutBtn" class="secondary-btn">Logout</button>
+          </div>
+        </header>
+
+        <nav class="main-nav">
+          <button class="nav-button active" data-target="dashboardPage">Dashboard</button>
+          <button class="nav-button" data-target="dailyPage">Daily Accounting</button>
+          <button class="nav-button" data-target="machinesPage">Machines</button>
+          <button class="nav-button" data-target="shiftPage">Shifts</button>
+          <button class="nav-button" data-target="paymentsPage">Payments</button>
+          <button class="nav-button" data-target="reportsPage">Reports</button>
+          <button class="nav-button" data-target="assistantPage">AI Assistant</button>
+          <button class="nav-button" data-target="settingsPage">Settings</button>
+        </nav>
+
+        <main>
+          <section id="dashboardPage" class="page active">
+            <div class="section-head">
+              <h3>Owner Dashboard</h3>
+              <input id="dashboardDate" type="date" />
+            </div>
+            <div id="dashboardCards" class="dashboard-grid"></div>
+            <div class="panel table-panel">
+              <h4>Daily Shift Summary</h4>
+              <div id="dashboardTable"></div>
+            </div>
+          </section>
+
+          <section id="dailyPage" class="page">
+            <div class="section-head">
+              <h3>Daily Accounting</h3>
+            </div>
+            <div id="dailyReport"></div>
+          </section>
+
+          <section id="machinesPage" class="page">
+            <div class="panel">
+              <h4>Add Machine</h4>
+              <form id="machineForm" class="inline-form">
+                <input type="text" id="machineName" placeholder="Machine name" required />
+                <button type="submit">Add Machine</button>
+              </form>
+            </div>
+            <div class="panel">
+              <h4>Add Nozzle</h4>
+              <form id="nozzleForm" class="inline-form grid-form">
+                <select id="machineSelect"></select>
+                <input type="number" id="nozzleNumber" placeholder="Nozzle no" required />
+                <select id="fuelType">
+                  <option value="Petrol">Petrol</option>
+                  <option value="Diesel">Diesel</option>
+                </select>
+                <input type="text" id="productName" placeholder="Product name" required />
+                <input type="number" id="currentMeterReading" placeholder="Current meter" />
+                <input type="number" id="currentFuelRate" placeholder="Fuel rate" step="0.01" />
+                <button type="submit">Add Nozzle</button>
+              </form>
+            </div>
+            <div class="panel table-panel">
+              <h4>Machines & Nozzles</h4>
+              <div id="machinesTable"></div>
+            </div>
+          </section>
+
+          <section id="shiftPage" class="page">
+            <div class="panel">
+              <h4>Create Shift Record</h4>
+              <form id="shiftForm" class="inline-form">
+                <select id="employeeSelect"></select>
+                <select id="shiftSelect"></select>
+                <input type="date" id="shiftDate" required />
+                <button type="submit">Create Shift</button>
+              </form>
+            </div>
+            <div class="panel table-panel">
+              <h4>Shift Records</h4>
+              <div id="shiftRecordsTable"></div>
+            </div>
+          </section>
+
+          <section id="paymentsPage" class="page">
+            <div class="panel">
+              <h4>Payment Entries</h4>
+              <form id="paymentForm" class="inline-form grid-form">
+                <select id="paymentShiftSelect"></select>
+                <input type="text" id="paymentDescription" placeholder="Description" />
+                <input type="number" id="paymentAmount" placeholder="Amount" step="0.01" required />
+                <select id="paymentMode">
+                  <option value="Cash">Cash</option>
+                  <option value="Paytm">Paytm</option>
+                  <option value="PhonePe">PhonePe</option>
+                  <option value="Google Pay">Google Pay</option>
+                  <option value="Other UPI">Other UPI</option>
+                  <option value="Debit/Credit Card">Debit/Credit Card</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Cheque">Cheque</option>
+                  <option value="Credit / Udhaar">Credit / Udhaar</option>
+                  <option value="Other">Other</option>
+                </select>
+                <button type="submit">Add Payment</button>
+              </form>
+            </div>
+            <div class="panel">
+              <h4>Miscellaneous Collections</h4>
+              <form id="miscForm" class="inline-form grid-form">
+                <select id="miscShiftSelect"></select>
+                <input type="text" id="miscDescription" placeholder="Description" required />
+                <input type="text" id="miscCustomer" placeholder="Customer" />
+                <select id="miscCategory">
+                  <option value="Previous credit recovery">Previous credit recovery</option>
+                  <option value="Lubricant sales">Lubricant sales</option>
+                  <option value="Engine oil sales">Engine oil sales</option>
+                  <option value="Other product sales">Other product sales</option>
+                  <option value="Other collections">Other collections</option>
+                </select>
+                <input type="number" id="miscAmount" placeholder="Amount" step="0.01" required />
+                <select id="miscPaymentMode">
+                  <option value="Cash">Cash</option>
+                  <option value="Paytm">Paytm</option>
+                  <option value="PhonePe">PhonePe</option>
+                  <option value="Google Pay">Google Pay</option>
+                  <option value="Other UPI">Other UPI</option>
+                  <option value="Debit/Credit Card">Debit/Credit Card</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Cheque">Cheque</option>
+                  <option value="Credit / Udhaar">Credit / Udhaar</option>
+                  <option value="Other">Other</option>
+                </select>
+                <button type="submit">Add Misc</button>
+              </form>
+            </div>
+          </section>
+
+          <section id="reportsPage" class="page">
+            <div class="section-head">
+              <h3>Reports</h3>
+              <button class="secondary-btn" id="exportReportBtn">Export JSON</button>
+            </div>
+            <div id="reportSummary" class="report-box"></div>
+          </section>
+
+          <section id="assistantPage" class="page">
+            <div class="panel">
+              <h4>AI Accounting Assistant</h4>
+              <div id="aiAlerts" class="ai-list"></div>
+            </div>
+          </section>
+
+          <section id="settingsPage" class="page">
+            <div class="panel">
+              <h4>Fuel Rates</h4>
+              <form id="fuelRateForm" class="inline-form">
+                <select id="fuelRateType">
+                  <option value="Petrol">Petrol</option>
+                  <option value="Diesel">Diesel</option>
+                </select>
+                <input type="number" id="fuelRateValue" placeholder="Rate" step="0.01" required />
+                <button type="submit">Save Rate</button>
+              </form>
+              <div id="fuelRateTable"></div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

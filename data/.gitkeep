@@ -1,0 +1,446 @@
+const authToken = () => localStorage.getItem('petrolPumpToken');
+const api = async (path, options = {}) => {
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  const token = authToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(path, { ...options, headers });
+  const text = await response.text();
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch (error) {
+    data = { message: text };
+  }
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Request failed');
+  }
+  return data;
+};
+
+const appState = {
+  user: null,
+  activePage: 'dashboardPage',
+};
+
+const els = {
+  loginScreen: document.getElementById('loginScreen'),
+  mainApp: document.getElementById('mainApp'),
+  loginForm: document.getElementById('loginForm'),
+  loginMessage: document.getElementById('loginMessage'),
+  usernameBadge: document.getElementById('usernameBadge'),
+  dashboardDate: document.getElementById('dashboardDate'),
+  dashboardCards: document.getElementById('dashboardCards'),
+  dashboardTable: document.getElementById('dashboardTable'),
+  machinesTable: document.getElementById('machinesTable'),
+  shiftRecordsTable: document.getElementById('shiftRecordsTable'),
+  aiAlerts: document.getElementById('aiAlerts'),
+  reportSummary: document.getElementById('reportSummary'),
+  fuelRateTable: document.getElementById('fuelRateTable'),
+  employeeSelect: document.getElementById('employeeSelect'),
+  shiftSelect: document.getElementById('shiftSelect'),
+  shiftDate: document.getElementById('shiftDate'),
+  machineSelect: document.getElementById('machineSelect'),
+};
+
+function setPage(pageId) {
+  document.querySelectorAll('.nav-button').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.target === pageId);
+  });
+  document.querySelectorAll('.page').forEach((page) => {
+    page.classList.toggle('active', page.id === pageId);
+  });
+  appState.activePage = pageId;
+}
+
+function showMessage(el, message, isError = false) {
+  el.textContent = message;
+  el.style.color = isError ? '#ff9a8b' : '#f5b700';
+}
+
+async function loginUser(event) {
+  event.preventDefault();
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value.trim();
+  try {
+    const result = await api('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+    localStorage.setItem('petrolPumpToken', result.token);
+    appState.user = result.user;
+    els.loginScreen.classList.add('hidden');
+    els.mainApp.classList.remove('hidden');
+    els.usernameBadge.textContent = `${result.user.name} (${result.user.role})`;
+    setPage('dashboardPage');
+    await loadAll();
+  } catch (error) {
+    showMessage(els.loginMessage, error.message, true);
+  }
+}
+
+function logoutUser() {
+  localStorage.removeItem('petrolPumpToken');
+  appState.user = null;
+  els.loginScreen.classList.remove('hidden');
+  els.mainApp.classList.add('hidden');
+  document.getElementById('loginForm').reset();
+}
+
+async function loadAll() {
+  try {
+    const [dashboard, machines, shifts, records, alerts, rates] = await Promise.all([
+      api(`/api/dashboard?date=${els.dashboardDate.value || new Date().toISOString().slice(0, 10)}`),
+      api('/api/machines'),
+      api('/api/shifts'),
+      api('/api/shift-records'),
+      api('/api/ai-alerts'),
+      api('/api/settings/fuel-rates'),
+    ]);
+
+    renderDashboard(dashboard);
+    renderMachines(machines);
+    renderShifts(shifts);
+    renderShiftRecords(records);
+    renderAIAlerts(alerts);
+    renderFuelRates(rates);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function renderDashboard(data) {
+  const metrics = [
+    { label: 'Today Sales', value: `₹${(data.totals?.totalNet || 0).toFixed(2)}` },
+    { label: 'Petrol Sales', value: `₹${(data.totals?.totalFuelSales || 0).toFixed(2)}` },
+    { label: 'Diesel Sales', value: `₹${(data.totals?.totalFuelSales || 0).toFixed(2)}` },
+    { label: 'Cash Collected', value: `₹${(data.totals?.totalCash || 0).toFixed(2)}` },
+    { label: 'Digital', value: `₹${(data.totals?.totalDigital || 0).toFixed(2)}` },
+    { label: 'Credit Sales', value: `₹${(data.totals?.totalCredit || 0).toFixed(2)}` },
+    { label: 'Cash Difference', value: `₹${(data.totals?.totalCashDifference || 0).toFixed(2)}` },
+  ];
+
+  els.dashboardCards.innerHTML = metrics.map((card) => `
+    <div class="stat-card">
+      <div class="label">${card.label}</div>
+      <div class="value">${card.value}</div>
+    </div>
+  `).join('');
+
+  const rows = data.records || [];
+  els.dashboardTable.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Shift</th>
+          <th>Status</th>
+          <th>Fuel Sales</th>
+          <th>Misc</th>
+          <th>Net</th>
+          <th>Cash</th>
+          <th>Difference</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((row) => `
+          <tr>
+            <td>${row.shift_name}</td>
+            <td><span class="badge ${row.status === 'approved' ? 'green' : row.status === 'pending_approval' ? 'orange' : 'red'}">${row.status}</span></td>
+            <td>₹${(row.summary?.totalFuelSales || 0).toFixed(2)}</td>
+            <td>₹${(row.summary?.totalMiscellaneous || 0).toFixed(2)}</td>
+            <td>₹${(row.summary?.totalNet || 0).toFixed(2)}</td>
+            <td>₹${(row.summary?.totalCash || 0).toFixed(2)}</td>
+            <td>₹${(row.summary?.difference || 0).toFixed(2)}</td>
+          </tr>
+        `).join('') || '<tr><td colspan="7">No records</td></tr>'}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderMachines(data) {
+  const html = data.map((machine) => `
+    <div class="panel" style="margin-bottom:12px;">
+      <h4>${machine.name}</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>Nozzle</th>
+            <th>Fuel</th>
+            <th>Product</th>
+            <th>Meter</th>
+            <th>Rate</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(machine.nozzles || []).map((n) => `
+            <tr>
+              <td>${n.nozzle_number}</td>
+              <td>${n.fuel_type}</td>
+              <td>${n.product_name}</td>
+              <td>${n.current_meter_reading}</td>
+              <td>₹${Number(n.current_fuel_rate || 0).toFixed(2)}</td>
+              <td><span class="badge ${n.is_active ? 'green' : 'red'}">${n.is_active ? 'Active' : 'Inactive'}</span></td>
+            </tr>
+          `).join('') || '<tr><td colspan="6">No nozzles</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  `).join('');
+
+  els.machinesTable.innerHTML = html;
+  const options = data.map((machine) => `<option value="${machine.id}">${machine.name}</option>`).join('');
+  els.machineSelect.innerHTML = options;
+}
+
+function renderShifts(shifts) {
+  els.shiftSelect.innerHTML = shifts.map((shift) => `<option value="${shift.id}">${shift.name}</option>`).join('');
+}
+
+function renderShiftRecords(records) {
+  els.shiftRecordsTable.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Shift</th>
+          <th>Employee</th>
+          <th>Status</th>
+          <th>Net</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${records.map((record) => `
+          <tr>
+            <td>${record.report_date}</td>
+            <td>${record.shift_name}</td>
+            <td>${record.employee_name}</td>
+            <td><span class="badge ${record.status === 'approved' ? 'green' : record.status === 'pending_approval' ? 'orange' : 'red'}">${record.status}</span></td>
+            <td>₹${(record.summary?.totalNet || 0).toFixed(2)}</td>
+            <td>
+              <button class="secondary-btn" data-record-id="${record.id}" data-action="approve">Approve</button>
+              <button class="secondary-btn" data-record-id="${record.id}" data-action="reject">Reject</button>
+            </td>
+          </tr>
+        `).join('') || '<tr><td colspan="6">No shift records</td></tr>'}
+      </tbody>
+    </table>
+  `;
+
+  els.shiftRecordsTable.querySelectorAll('button[data-action]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const id = button.dataset.recordId;
+      const action = button.dataset.action;
+      try {
+        await api(`/api/shift-records/${id}/${action}`, { method: 'POST', body: JSON.stringify({ reason: `${action === 'approve' ? 'Approved' : 'Rejected'} from UI` }) });
+        await loadAll();
+      } catch (error) {
+        alert(error.message);
+      }
+    });
+  });
+}
+
+function renderAIAlerts(alerts) {
+  if (!alerts.length) {
+    els.aiAlerts.innerHTML = '<p>No AI alerts detected.</p>';
+    return;
+  }
+
+  els.aiAlerts.innerHTML = alerts.map((alert) => `
+    <div class="ai-item">
+      <h5>${alert.title}</h5>
+      <p>${alert.message}</p>
+      <small>${alert.shiftName || 'General'} • ${alert.severity}</small>
+    </div>
+  `).join('');
+}
+
+function renderFuelRates(rates) {
+  els.fuelRateTable.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Fuel Type</th>
+          <th>Rate</th>
+          <th>Valid From</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rates.map((item) => `
+          <tr><td>${item.fuel_type}</td><td>₹${Number(item.rate).toFixed(2)}</td><td>${item.valid_from}</td></tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+async function initApp() {
+  const token = authToken();
+  if (!token) {
+    els.loginScreen.classList.remove('hidden');
+    els.mainApp.classList.add('hidden');
+    return;
+  }
+
+  try {
+    const me = await api('/api/auth/me');
+    appState.user = me.user;
+    els.usernameBadge.textContent = `${me.user.name} (${me.user.role})`;
+    els.loginScreen.classList.add('hidden');
+    els.mainApp.classList.remove('hidden');
+    setPage('dashboardPage');
+    await loadAll();
+  } catch (error) {
+    localStorage.removeItem('petrolPumpToken');
+    els.loginScreen.classList.remove('hidden');
+    els.mainApp.classList.add('hidden');
+  }
+}
+
+async function bindForms() {
+  document.getElementById('loginForm').addEventListener('submit', loginUser);
+  document.getElementById('logoutBtn').addEventListener('click', logoutUser);
+
+  document.querySelectorAll('.nav-button').forEach((button) => {
+    button.addEventListener('click', () => setPage(button.dataset.target));
+  });
+
+  els.dashboardDate.addEventListener('change', async () => {
+    await api(`/api/dashboard?date=${els.dashboardDate.value}`);
+    await loadAll();
+  });
+
+  document.getElementById('machineForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const name = document.getElementById('machineName').value.trim();
+    await api('/api/machines', { method: 'POST', body: JSON.stringify({ name }) });
+    event.target.reset();
+    await loadAll();
+  });
+
+  document.getElementById('nozzleForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const payload = {
+      machine_id: Number(document.getElementById('machineSelect').value),
+      nozzle_number: Number(document.getElementById('nozzleNumber').value),
+      fuel_type: document.getElementById('fuelType').value,
+      product_name: document.getElementById('productName').value,
+      current_meter_reading: Number(document.getElementById('currentMeterReading').value || 0),
+      current_fuel_rate: Number(document.getElementById('currentFuelRate').value || 0),
+    };
+    await api('/api/nozzles', { method: 'POST', body: JSON.stringify(payload) });
+    event.target.reset();
+    await loadAll();
+  });
+
+  document.getElementById('shiftForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const payload = {
+      employee_id: Number(document.getElementById('employeeSelect').value),
+      shift_id: Number(document.getElementById('shiftSelect').value),
+      report_date: document.getElementById('shiftDate').value,
+    };
+    await api('/api/shift-records', { method: 'POST', body: JSON.stringify(payload) });
+    event.target.reset();
+    await loadAll();
+  });
+
+  document.getElementById('paymentForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const shiftId = document.getElementById('paymentShiftSelect').value;
+    await api(`/api/shift-records/${shiftId}/payment`, {
+      method: 'POST',
+      body: JSON.stringify({
+        description: document.getElementById('paymentDescription').value || 'Payment entry',
+        amount: Number(document.getElementById('paymentAmount').value),
+        payment_mode: document.getElementById('paymentMode').value,
+      }),
+    });
+    event.target.reset();
+    await loadAll();
+  });
+
+  document.getElementById('miscForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const shiftId = document.getElementById('miscShiftSelect').value;
+    await api(`/api/shift-records/${shiftId}/miscellaneous`, {
+      method: 'POST',
+      body: JSON.stringify({
+        description: document.getElementById('miscDescription').value,
+        customer_name: document.getElementById('miscCustomer').value,
+        category: document.getElementById('miscCategory').value,
+        amount: Number(document.getElementById('miscAmount').value),
+        payment_mode: document.getElementById('miscPaymentMode').value,
+        remarks: 'Entered via UI',
+      }),
+    });
+    event.target.reset();
+    await loadAll();
+  });
+
+  document.getElementById('fuelRateForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await api('/api/settings/fuel-rates', {
+      method: 'POST',
+      body: JSON.stringify({
+        fuel_type: document.getElementById('fuelRateType').value,
+        rate: Number(document.getElementById('fuelRateValue').value),
+      }),
+    });
+    event.target.reset();
+    await loadAll();
+  });
+
+  document.getElementById('exportReportBtn').addEventListener('click', async () => {
+    const data = await api(`/api/reports/daily?date=${els.dashboardDate.value || new Date().toISOString().slice(0, 10)}`);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'daily-report.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+async function loadSelectorData() {
+  const [employees, shifts, records] = await Promise.all([
+    api('/api/shift-records'),
+    api('/api/shifts'),
+    api('/api/shift-records'),
+  ]);
+
+  const defaultEmployees = [
+    { id: 1, name: 'Owner Admin' },
+    { id: 2, name: 'Amit Sharma' },
+    { id: 3, name: 'Rohit Verma' },
+  ];
+
+  const employeeHtml = defaultEmployees.map((emp) => `<option value="${emp.id}">${emp.name}</option>`).join('');
+  els.employeeSelect.innerHTML = employeeHtml;
+
+  const shiftHtml = shifts.map((shift) => `<option value="${shift.id}">${shift.name}</option>`).join('');
+  els.shiftSelect.innerHTML = shiftHtml;
+
+  const paymentShiftHtml = records.map((record) => `<option value="${record.id}">${record.shift_name} (${record.report_date})</option>`).join('');
+  document.getElementById('paymentShiftSelect').innerHTML = paymentShiftHtml;
+  document.getElementById('miscShiftSelect').innerHTML = paymentShiftHtml;
+}
+
+async function bootstrap() {
+  bindForms();
+  await loadSelectorData();
+  await initApp();
+}
+
+bootstrap();
+
+window.addEventListener('load', () => {
+  els.dashboardDate.value = new Date().toISOString().slice(0, 10);
+});
